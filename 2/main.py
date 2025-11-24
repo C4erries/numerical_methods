@@ -10,30 +10,30 @@ import numpy as np
 
 
 # -----------------------------
-# Parsing helpers
+# Вспомогательные функции разбора
 # -----------------------------
 
 def _read_text(path: Path) -> str:
-    """Read text from a file trying UTF-8 (with BOM support) first and cp1251 second."""
+    """Считать текст из файла, пробуя сначала UTF-8 (включая UTF-8 с BOM), затем cp1251."""
     for encoding in ("utf-8-sig", "utf-8", "cp1251"):
         try:
             return path.read_text(encoding=encoding)
         except UnicodeDecodeError:
             continue
-    # If everything fails, re-raise using UTF-8 for a clearer error message
+        
     return path.read_text(encoding="utf-8")
 
 
 def _parse_numbers(line: str) -> np.ndarray:
-    """Parse a line like 'x: 0 1 2' into a numpy array of floats."""
+    """Разобрать строку вида 'x: 0 1 2' в массив чисел с плавающей точкой."""
     return np.array([float(tok) for tok in line.strip().split()[1:]], dtype=float)
 
 
 def parse_input(text: str) -> Dict[str, Any]:
     """
-    Parse the textual description of the problem.
-    Required keys: x:, y:, xmin:, xmax:.
-    Optional keys: n_plot:, conditions:, dy0:, dyn:.
+    Разобрать текстовое описание задачи.
+    Обязательные ключи: x:, y:, xmin:, xmax:.
+    Необязательные ключи: n_plot:, conditions:, dy0:, dyn:.
     """
     clean_lines = []
     for raw_line in text.splitlines():
@@ -93,7 +93,7 @@ def parse_input(text: str) -> Dict[str, Any]:
 
 
 # -----------------------------
-# Cubic spline implementation
+# Реализация кубического сплайна
 # -----------------------------
 
 @dataclass
@@ -104,7 +104,7 @@ class CubicSpline1D:
     h: np.ndarray
 
     def evaluate(self, points: np.ndarray) -> np.ndarray:
-        """Evaluate the spline at arbitrary points."""
+        """Вычислить значение сплайна в произвольных точках."""
         xq = np.asarray(points, dtype=float)
         x, y, M, h = self.x, self.y, self.M, self.h
         n = x.size
@@ -213,7 +213,7 @@ def cubic_spline(
 
 
 # -----------------------------
-# File IO helpers
+# Работа с файлами
 # -----------------------------
 
 def sample_spline(
@@ -231,12 +231,12 @@ def write_output_file(
     samples_y: Sequence[float],
 ) -> None:
     lines = [
-        "# Cubic spline interpolation result",
-        f"# nodes: {cfg['x'].size}",
+        "# Результат интерполяции кубическим сплайном",
+        f"# число узлов: {cfg['x'].size}",
         f"# xmin: {cfg['xmin']}",
         f"# xmax: {cfg['xmax']}",
-        f"# n_plot (samples): {cfg['n_plot']}",
-        "# columns: x  spline(x)",
+        f"# n_plot (количество точек выборки): {cfg['n_plot']}",
+        "# столбцы: x  spline(x)",
     ]
     for x_val, y_val in zip(samples_x, samples_y):
         lines.append(f"{x_val:.10f}\t{y_val:.10f}")
@@ -244,7 +244,7 @@ def write_output_file(
 
 
 # -----------------------------
-# CLI
+# Интерфейс командной строки
 # -----------------------------
 
 def process_files(input_path: Path, output_path: Path) -> None:
@@ -262,20 +262,20 @@ def process_files(input_path: Path, output_path: Path) -> None:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Cubic spline interpolation helper.")
+    parser = argparse.ArgumentParser(description="Утилита для интерполяции кубическим сплайном.")
     parser.add_argument(
         "-i",
         "--input",
         type=Path,
-        default=Path("in.txt"),
-        help="Path to the input file (default: in.txt)",
+        default=Path(__file__).with_name("in.txt"),
+        help="Путь к входному файлу (по умолчанию: in.txt)",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
-        default=Path("out.txt"),
-        help="Where to store the sampled spline values (default: out.txt)",
+        default=Path(__file__).with_name("out.txt"),
+        help="Путь к выходному файлу с точками решения (по умолчанию: out.txt)",
     )
     return parser
 
