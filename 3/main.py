@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Задача 3. Поиск действительных корней многочлена методом Бернулли
-с уточнением методом Ньютона и дефляцией.
+с дефляцией (без уточнения методом Ньютона).
 
 Формат работы программы:
   - коэффициенты многочлена читаются из текстового файла (по умолчанию: in.txt);
@@ -63,6 +63,7 @@ def poly_eval_derivative(coeffs: Sequence[Number], x: Number) -> Number:
     """
     Вычислить значение производной p'(x) в точке x.
     Коэффициенты p заданы как [a0, a1, ..., ad] по убыванию степеней.
+    Функция оставлена для возможного расширения (например, уточнение корней методом Ньютона).
     """
     n = len(coeffs) - 1
     if n <= 0:
@@ -79,13 +80,13 @@ def synthetic_division(coeffs: Sequence[Number], r: Number) -> Tuple[List[Number
     Синтетическое деление многочлена p(x) на (x - r).
 
     Возвращает:
-      q_coeffs - коэффициенты частного q(x),
-      remainder - остаток p(r).
+      q_coeffs -- коэффициенты частного q(x),
+      remainder -- остаток p(r).
     """
     coeffs = list(coeffs)
     n = len(coeffs) - 1
     if n <= 0:
-        raise ValueError("Для деления на (x - r) степень многочлена должна быть >= 1.")
+        raise ValueError("Для деления на (x - r) степень многочлена должна быть не меньше 1.")
 
     b: List[Number] = [Number(coeffs[0])]
     for c in coeffs[1:]:
@@ -97,7 +98,8 @@ def synthetic_division(coeffs: Sequence[Number], r: Number) -> Tuple[List[Number
 def trailing_zeros_deflation(coeffs: Sequence[Number]) -> Tuple[List[Number], int]:
     """
     Удалить нулевые коэффициенты при младших степенях (справа).
-    Если a_n = 0, то x = 0 - корень. Возвращает (новые_коэффициенты, кратность_нуля).
+    Если a_n = 0, то x = 0 является корнем.
+    Возвращает (новые_коэффициенты, кратность_нуля).
     """
     coeffs = list(coeffs)
     k = 0
@@ -111,253 +113,332 @@ def normalize_polynomial(coeffs: Sequence[Number]) -> List[Number]:
     """
     Нормировать многочлен так, чтобы старший коэффициент был равен 1.
     Бросает ValueError, если многочлен нулевой или ведущий коэффициент равен 0.
+    Функция может использоваться перед применением других численных методов.
     """
     coeffs = strip_leading_zeros(coeffs)
     if not coeffs:
-        raise ValueError("Многочлен пустой - нет коэффициентов.")
+        raise ValueError("Многочлен пустой -- нет коэффициентов.")
     lead = coeffs[0]
     if lead == 0:
-        raise ValueError("Ведущий коэффициент многочлена равен 0 - нормировка невозможна.")
+        raise ValueError("Ведущий коэффициент многочлена равен 0 -- нормировка невозможна.")
     if lead != 1.0:
         coeffs = [c / lead for c in coeffs]
     return coeffs
 
 
 # ------------------------------
-# Метод Бернулли + уточнение Ньютона
+# Вспомогательные функции для степенных подстановок
+# ------------------------------
+
+def compress_power_polynomial(coeffs: Sequence[Number]) -> Tuple[List[Number], int]:
+    """
+    Проверить, являются ли степени всех ненулевых членов кратными одному и тому же
+    целому числу g, и при положительном ответе построить вспомогательный многочлен
+    по переменной y = x^g.
+
+    Возвращает (новые_коэффициенты, g). При g == 1 подстановка не выполняется.
+    """
+    coeffs = strip_leading_zeros(coeffs)
+    degree = len(coeffs) - 1
+    if degree <= 0:
+        return coeffs, 1
+
+    exponents = [degree - idx for idx, c in enumerate(coeffs) if c != 0]
+    if len(exponents) <= 1:
+        return coeffs, 1
+
+    g = 0
+    for exp in exponents:
+        g = math.gcd(g, int(abs(exp)))
+    if g <= 1:
+        return coeffs, 1
+
+    new_degree = degree // g
+    new_coeffs = [0.0] * (new_degree + 1)
+    for idx, c in enumerate(coeffs):
+        if c == 0:
+            continue
+        exp = degree - idx
+        target_deg = exp // g
+        target_idx = new_degree - target_deg
+        new_coeffs[target_idx] = c
+    return new_coeffs, g
+
+
+def expand_power_roots(
+    roots: Sequence[Number],
+    power: int,
+    steps: Optional[List[str]] = None,
+    tol: float = 1e-12,
+) -> List[Number]:
+    """
+    Преобразовать корни вспомогательного многочлена по переменной y обратно
+    к корням по переменной x после подстановки y = x^power.
+    Возвращаются только действительные корни.
+    """
+    if power <= 1:
+        return [float(r) for r in roots]
+
+    res: List[Number] = []
+    zero_eps = max(1e-14, tol)
+
+    if power % 2 == 1:
+        for y in roots:
+            if abs(y) < zero_eps:
+                res.extend([0.0] * power)
+                continue
+            x = math.copysign(abs(y) ** (1.0 / power), y)
+            res.append(float(x))
+        if steps is not None:
+            steps.append(f"Корни вспомогательного многочлена преобразованы с учётом подстановки y = x^{power}.")
+        return res
+
+    skipped = 0
+    for y in roots:
+        if abs(y) < zero_eps:
+            res.extend([0.0] * power)
+            continue
+        if y < 0.0:
+            skipped += 1
+            continue
+        base = abs(y) ** (1.0 / power)
+        res.append(float(base))
+        res.append(float(-base))
+
+    if steps is not None:
+        steps.append(
+            f"Каждый вспомогательный корень y >= 0 дал два действительных корня ±|y|^(1/{power}) после обратной подстановки."
+        )
+        if skipped:
+            steps.append(
+                f"{skipped} вспомогательных корней с y < 0 не дали действительных решений уравнения x^{power} = y."
+            )
+    return res
+
+
+# ------------------------------
+# Метод Бернулли (без Ньютона)
 # ------------------------------
 
 def bernoulli_dominant_root(
     coeffs: Sequence[Number],
     max_iter: int = 20000,
-    tol: float = 1e-12,
-    patience: int = 10,
+    eps: float = 1e-12,
+    multiple_roots: bool = False,
 ) -> Tuple[Optional[Number], Dict[str, object]]:
     """
     Найти доминирующий по модулю корень многочлена методом Бернулли.
 
-    Пусть p(x) = x^d + a_{d-1} x^{d-1} + ... + a_0 (после нормировки a0 = 1).
-    Тогда последовательность x_n задаётся рекуррентно:
-        x_{n} = - (a_{d-1} x_{n-1} + ... + a_0 x_{n-d}),
-    а отношения q_n = x_n / x_{n-1} сходятся к одному из корней.
+    Схема:
+      - строится рекуррентная последовательность u_n;
+      - на каждом шаге оценивается корень как root = u_n / u_{n-1};
+      - контролируется малость |p(root)| и |root - prev_root|.
+
+    Если multiple_roots=True, используются более строгие критерии сходимости.
     """
     info: Dict[str, object] = {
         "converged": False,
         "iterations": 0,
         "reason": "",
-        "last_ratio": None,
+        "root": None,
+        "residual": None,
     }
 
-    a = normalize_polynomial(coeffs)  # теперь a[0] == 1
-    d = len(a) - 1
-    if d <= 0:
-        info["reason"] = "Степень многочлена не положительна."
+    coeffs = strip_leading_zeros(coeffs)
+    n = len(coeffs) - 1
+    if n <= 0:
+        info["reason"] = "Степень многочлена должна быть положительной."
         return None, info
 
-    # окно значений x_{-d+1}, ..., x_0
-    window: List[Number] = [0.0] * (d - 1) + [1.0]
-    last_x = window[-1]
-    last_ratio: Optional[Number] = None
-    stable_hits = 0
+    a0 = coeffs[0]
+    if a0 == 0.0:
+        info["reason"] = "Ведущий коэффициент равен 0 -- метод Бернулли неприменим."
+        return None, info
 
-    big = 1e150
-    small = 1e-150
+    # Вектор u длины n: u[0..n-1], начальные значения равны 0, последний элемент = 1.
+    u: List[Number] = [0.0] * n
+    u[-1] = 1.0
 
-    for it in range(1, max_iter + 1):
-        # рекуррентное вычисление x_next
-        acc = 0.0
-        for k in range(1, d + 1):
-            acc += a[k] * window[-k]
-        x_next = -acc
-
-        # масштабирование, чтобы не улететь в переполнение/подпоток
-        maxabs = max(1.0, max(abs(v) for v in window + [x_next]))
-        if maxabs > big:
-            scale = maxabs
-            window = [v / scale for v in window]
-            x_next /= scale
-        elif maxabs < small:
-            scale = 1.0 / small
-            window = [v * scale for v in window]
-            x_next *= scale
-
-        # отслеживаем стабилизацию отношения q_n = x_n / x_{n-1}
-        if last_x != 0.0:
-            ratio = x_next / last_x
-            if last_ratio is not None:
-                rel = abs(ratio - last_ratio) / max(1.0, abs(ratio))
-                if rel < tol:
-                    stable_hits += 1
-                else:
-                    stable_hits = 0
-            last_ratio = ratio
-        else:
-            ratio = None
-
-        window = window[1:] + [x_next]
-        last_x = x_next
-
-        if ratio is not None and stable_hits >= patience:
-            info["converged"] = True
-            info["iterations"] = it
-            info["last_ratio"] = last_ratio
-            info["reason"] = "Отношения q_n стабилизировались по относительной погрешности."
-            return float(last_ratio), info
-
-    info["iterations"] = max_iter
-    info["last_ratio"] = last_ratio
-    info["reason"] = (
-        "Не удалось добиться стабильности q_n за заданное число итераций "
-        "(возможна плохая обусловленность или близкие по модулю корни)."
-    )
-    return None, info
-
-
-def newton_refine(
-    coeffs: Sequence[Number],
-    x0: Number,
-    tol: float = 1e-12,
-    max_iter: int = 100,
-) -> Tuple[Number, Dict[str, object]]:
-    """
-    Уточнить приближение корня методом Ньютона.
-    Возвращает пару (x, info), где info содержит флаг сходимости и причину остановки.
-    """
-    x = float(x0)
-    info: Dict[str, object] = {"converged": False, "iterations": 0, "reason": ""}
+    prev_root: Optional[Number] = None
+    root: Number = 0.0
 
     for it in range(1, max_iter + 1):
-        fx = poly_eval(coeffs, x)
-        dfx = poly_eval_derivative(coeffs, x)
-        if dfx == 0.0:
-            info["iterations"] = it
-            info["reason"] = "Производная занулилась - шаг Ньютона невозможен."
-            return x, info
+        s = 0.0
+        for j in range(n):
+            s += (coeffs[j + 1] * u[n - 1 - j]) / a0
 
-        step = fx / dfx
-        x -= step
-        if abs(step) <= tol * max(1.0, abs(x)):
+        u = u[1:] + [-s]
+
+        # Оценка корня как отношение двух последних членов последовательности u.
+        if u[-2] == 0.0:
+            # На текущем шаге отношение вычислить нельзя.
+            continue
+        root = u[-1] / u[-2]
+
+        # Периодическое масштабирование (каждые 10 итераций) для уменьшения переполнений.
+        if it % 10 == 0:
+            scale = u[-1]
+            if scale != 0.0:
+                u = [val / scale for val in u]
+
+        f_root = poly_eval(coeffs, root)
+        thresh = eps * eps if multiple_roots else eps
+
+        # Критерий сходимости:
+        # |p(root)| < thresh и |root - prev_root| < thresh
+        if prev_root is not None and abs(f_root) < thresh and abs(root - prev_root) < thresh:
             info["converged"] = True
             info["iterations"] = it
-            info["reason"] = "Шаги Ньютона стали достаточно малы."
-            return x, info
+            info["root"] = float(root)
+            info["residual"] = float(f_root)
+            info["reason"] = "Условия по |p(r)| и |Δr| выполнены."
+            return float(root), info
 
+        prev_root = root
+
+    # Если сюда дошли -- сходимость по основному критерию не достигнута.
+    f_root = poly_eval(coeffs, root)
     info["iterations"] = max_iter
-    info["reason"] = "Метод Ньютона не сошёлся за заданное число итераций."
-    return x, info
+    info["root"] = float(root)
+    info["residual"] = float(f_root)
 
+    # При |p(root)| >= eps считаем, что требуемая точность не достигнута.
+    if abs(f_root) >= eps:
+        info["reason"] = (
+            "Не удалось достичь заданной точности: |p(r)| >= eps; "
+            "возможно, отсутствует действительный корень или выполнено недостаточное число итераций."
+        )
+        return None, info
+    else:
+        info["reason"] = "Достигнут лимит итераций, но |p(r)| < eps; корень принят."
+        info["converged"] = True
+        return float(root), info
+
+
+# ------------------------------
+# Поиск всех действительных корней (Бернулли + дефляция)
+# ------------------------------
 
 def find_all_real_roots_bernoulli(
     coeffs: Sequence[Number],
     tol_ratio: float = 1e-12,
-    tol_newton: float = 1e-12,
     max_iter_ratio: int = 20000,
+    multiple_roots: bool = False,
 ) -> Tuple[List[Number], Dict[str, object]]:
     """
-    Найти все действительные корни многочлена:
-      1) методом Бернулли для доминирующего корня;
-      2) уточнением методом Ньютона;
-      3) последовательной дефляцией.
-
-    Для степени 1 и 2 используются явные формулы (линейная и квадратная).
-    Возвращает (список_корней, summary) с описанием шагов и остаточной степенью.
+    Найти все действительные корни многочлена, используя метод Бернулли
+    с последовательной дефляцией многочлена.
     """
     coeffs = strip_leading_zeros(coeffs)
     if len(coeffs) < 2:
-        return [], {"reason": "Степень многочлена 0 - действительных корней нет.", "degree_left": 0, "steps": []}
+        return [], {
+            "reason": "Степень многочлена меньше 1; действительные корни не извлекаются.",
+            "degree_left": 0,
+            "steps": [],
+        }
 
-    roots: List[Number] = []
+    actual_roots: List[Number] = []
+    aux_roots: List[Number] = []
     summary: Dict[str, object] = {"steps": []}
 
-    # Сначала вытащим корни x = 0 (если есть)
     coeffs, zeros = trailing_zeros_deflation(coeffs)
-    roots.extend([0.0] * zeros)
+    actual_roots.extend([0.0] * zeros)
     if zeros:
         summary["steps"].append(
-            f"Удалены {zeros} нулевых коэффициентов при младших степенях -> корень x=0 с кратностью {zeros}."
+            f"Удалены {zeros} нулевых коэффициентов при младших степенях; корень x = 0 добавлен с соответствующей кратностью."
+        )
+
+    coeffs, power_factor = compress_power_polynomial(coeffs)
+    if power_factor > 1 and len(coeffs) > 1:
+        summary["steps"].append(
+            f"Обнаружено, что степени всех ненулевых членов кратны {power_factor}; используется вспомогательный многочлен при подстановке y = x^{power_factor}."
         )
 
     while len(coeffs) > 1:
         degree = len(coeffs) - 1
 
         if degree == 1:
-            # линейный случай: a0 x + a1 = 0
             a0, a1 = coeffs
             if a0 == 0.0:
                 break
             r = -a1 / a0
-            roots.append(r)
+            aux_roots.append(r)
             coeffs = [1.0]
-            summary["steps"].append("Обработка линейного остатка - найден ещё один корень.")
+            summary["steps"].append("Оставшийся линейный множитель решён аналитически.")
             break
 
         if degree == 2:
-            # квадратный случай: a0 x^2 + a1 x + a2
             a0, a1, a2 = coeffs
             if a0 == 0.0:
-                # вырождается в линейный случай
                 if a1 != 0.0:
                     r = -a2 / a1
-                    roots.append(r)
-                    summary["steps"].append("Квадратный случай выродился в линейный - найден корень.")
+                    aux_roots.append(r)
+                    summary["steps"].append(
+                        "Квадратичный множитель выродился в линейный; найден соответствующий корень."
+                    )
                 break
             D = a1 * a1 - 4.0 * a0 * a2
-            if D < 0.0:
-                summary["steps"].append("Дискриминант < 0 - действительных корней у оставшегося квадратичного множителя нет.")
+            eps_D = 1e-14 * (1.0 + abs(a1) * abs(a1) + abs(a0) * abs(a2))
+            if D < -eps_D:
+                summary["steps"].append(
+                    "Дискриминант отрицателен; действительных корней на этом шаге нет."
+                )
                 break
+            if D < 0.0:
+                D = 0.0
             sqrtD = math.sqrt(D)
             r1 = (-a1 + sqrtD) / (2.0 * a0)
             r2 = (-a1 - sqrtD) / (2.0 * a0)
-            roots.append(r1)
-            roots.append(r2)
+            aux_roots.append(r1)
+            aux_roots.append(r2)
             coeffs = [1.0]
-            summary["steps"].append("Квадратный остаток решён по формуле - найдено ещё два корня.")
-            break
-
-        # степень >= 3 - используем Бернулли + Ньютон
-        r0, info_b = bernoulli_dominant_root(coeffs, max_iter=max_iter_ratio, tol=tol_ratio)
-        summary["steps"].append(f"Бернулли: {info_b}")
-        if r0 is None:
-            summary["reason"] = "Метод Бернулли не дал устойчивой оценки корня - дальнейший поиск прекращён."
-            break
-
-        r, info_n = newton_refine(coeffs, r0, tol=tol_newton)
-        summary["steps"].append(f"Ньютон: {info_n}")
-
-        # проверяем невязку
-        resid = abs(poly_eval(coeffs, r))
-        if resid > math.sqrt(tol_newton):
             summary["steps"].append(
-                f"Предупреждение: невязка |p(r)|={resid:.3e} довольно велика - корень может быть неточным."
+                "Квадратичный множитель решён по формуле; оба корня добавлены."
+            )
+            break
+
+        r, info_b = bernoulli_dominant_root(
+            coeffs,
+            max_iter=max_iter_ratio,
+            eps=tol_ratio,
+            multiple_roots=multiple_roots,
+        )
+        summary["steps"].append(f"Этап метода Бернулли: {info_b}")
+        if r is None:
+            summary["reason"] = "Итерационный процесс Бернулли не достиг заданной точности."
+            break
+
+        resid = abs(poly_eval(coeffs, r))
+        if resid > tol_ratio:
+            summary["steps"].append(
+                f"Предупреждение: |p(r)| = {resid:.3e} превышает заданную точность tol_ratio = {tol_ratio:.1e}."
             )
 
-        # деление на (x - r)
         q, rem = synthetic_division(coeffs, r)
         if abs(rem) > 1e-6 * (1 + sum(abs(c) for c in coeffs)):
             summary["steps"].append(
-                f"Предупреждение: остаток при делении p(x)/(x - r) равен {rem:.3e}, "
-                "что указывает на неточный корень."
+                f"Предупреждение: остаток синтетического деления {rem:.3e} по величине значителен."
             )
         coeffs = q
-        roots.append(r)
+        aux_roots.append(r)
 
-        # подчистим очень маленькие коэффициенты и снова вынесем возможные корни x=0
         coeffs = [0.0 if abs(c) < 1e-16 else c for c in coeffs]
         coeffs, z = trailing_zeros_deflation(coeffs)
         if z:
-            roots.extend([0.0] * z)
+            aux_roots.extend([0.0] * z)
             summary["steps"].append(
-                f"После дефляции обнаружены ещё {z} корней x=0 (по нулевым коэффициентам)."
+                f"После дефляции появились {z} дополнительных нулевых коэффициентов; добавлены корни y = 0 с этой кратностью."
             )
 
-    summary["degree_left"] = len(coeffs) - 1
-    summary.setdefault("reason", "Алгоритм завершён: дальнейшая дефляция не требуется.")
-    return roots, summary
+    summary["degree_left"] = power_factor * (len(coeffs) - 1)
+    summary.setdefault(
+        "reason",
+        "Алгоритм завершён; дальнейшая дефляция не требуется."
+    )
+    expanded_roots = expand_power_roots(aux_roots, power_factor, summary["steps"], tol_ratio)
+    all_roots = actual_roots + expanded_roots
+    return all_roots, summary
 
-
-# ------------------------------
-# Ввод/вывод коэффициентов и корней
-# ------------------------------
 
 def read_coeffs_from_file(path: Path) -> List[Number]:
     """
@@ -365,7 +446,7 @@ def read_coeffs_from_file(path: Path) -> List[Number]:
     """
     text = path.read_text(encoding="utf-8").strip()
 
-    # Попытка интерпретировать как JSON
+    # Попытка интерпретировать как JSON.
     try:
         obj = json.loads(text)
         if isinstance(obj, dict) and "coefficients" in obj and isinstance(obj["coefficients"], list):
@@ -373,7 +454,7 @@ def read_coeffs_from_file(path: Path) -> List[Number]:
     except Exception:
         pass
 
-    # Текстовые форматы
+    # Текстовые форматы.
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if not lines:
         raise ValueError("Файл с коэффициентами пуст.")
@@ -402,19 +483,20 @@ def process_file(
     output_path: Path,
     *,
     tol_ratio: float = 1e-12,
-    tol_newton: float = 1e-12,
     max_iter_ratio: int = 20000,
+    multiple_roots: bool = False,
 ) -> Tuple[List[Number], Dict[str, object]]:
     """
-    Прочитать многочлен из файла, найти действительные корни и сохранить их в выходной файл.
+    Прочитать многочлен из файла, найти действительные корни
+    и сохранить их в выходной файл.
     Возвращает (список_корней, summary).
     """
     coeffs = read_coeffs_from_file(input_path)
     roots, summary = find_all_real_roots_bernoulli(
         coeffs,
         tol_ratio=tol_ratio,
-        tol_newton=tol_newton,
         max_iter_ratio=max_iter_ratio,
+        multiple_roots=multiple_roots,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -445,20 +527,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tol-ratio",
         type=float,
-        default=1e-12,
-        help="Точность стабилизации отношений Бернулли (по умолчанию 1e-12).",
-    )
-    parser.add_argument(
-        "--tol-newton",
-        type=float,
-        default=1e-12,
-        help="Точность метода Ньютона (по умолчанию 1e-12).",
+        default=1e-8,
+        help="Запрошенная точность по методу Бернулли (eps, по умолчанию 1e-8).",
     )
     parser.add_argument(
         "--max-iter-ratio",
         type=int,
         default=20000,
         help="Максимальное число итераций для метода Бернулли (по умолчанию 20000).",
+    )
+    parser.add_argument(
+        "--multiple-roots",
+        action="store_true",
+        help="Режим поиска совпадающих корней (используются более строгие критерии сходимости).",
     )
     return parser
 
@@ -474,8 +555,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         input_path,
         output_path,
         tol_ratio=args.tol_ratio,
-        tol_newton=args.tol_newton,
         max_iter_ratio=args.max_iter_ratio,
+        multiple_roots=args.multiple_roots,
     )
 
     coeffs = read_coeffs_from_file(input_path)
@@ -489,7 +570,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     degree_left = summary.get("degree_left", 0)
     if degree_left and degree_left > 0:
         print(
-            f"\nВнимание: после дефляции остался многочлен степени {degree_left} - "
+            f"\nВнимание: после дефляции остался многочлен степени {degree_left} -- "
             "возможно наличие дополнительных комплексных корней или численных проблем."
         )
 
@@ -504,4 +585,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-
