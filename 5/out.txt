@@ -1,0 +1,4 @@
+x = 0.8177316193
+integral = 1.0000000000
+Phi(x) = integral - b = 1.3744561045e-13
+iterations = 5
