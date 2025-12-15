@@ -5,7 +5,7 @@ def f(x: float) -> float:
     """
     Функция f(x) под интегралом.
     """
-    return x**2 + 1
+    return 1.0 / (1.0 + x**2)
 
 
 def integrate_trap(a: float, x: float, m: int) -> float:
