@@ -1,4 +1,4 @@
-x = 1.0000000033
+x = 1.0000000000
 integral = 0.7853981634
-Phi(x) = integral - b = 2.9976021665e-15
-iterations = 2
+Phi(x) = integral - b = -2.6048496693e-11
+iterations = 1

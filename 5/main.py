@@ -7,8 +7,14 @@ def f(x: float) -> float:
     """
     return 1.0 / (1.0 + x**2)
 
+def intergate(h: float, a: float, x:float) -> float:
+    s = 0.5 * (f(a) + f(x))
+    for k in range(1, int((x-a)/h)):
+        t = a + k * h
+        s += f(t)
+    return s * h
 
-def integrate_trap(a: float, x: float, m: int) -> float:
+def integrate_trap(a: float, x: float, eps: float, m: int) -> float:
     """
     Численное вычисление интеграла ∫_a^x f(t) dt
     по формуле трапеций с m разбиениями.
@@ -20,14 +26,18 @@ def integrate_trap(a: float, x: float, m: int) -> float:
 
     # Если x < a, интегрируем от x до a и меняем знак
     if x < a:
-        return -integrate_trap(x, a, m)
-
+        return -integrate_trap(x, a, eps, m)
+    
     h = (x - a) / m
-    s = 0.5 * (f(a) + f(x))
-    for k in range(1, m):
-        t = a + k * h
-        s += f(t)
-    return s * h
+    I = intergate(h, a, x)
+    I2 = intergate(h/2, a, x)
+    while abs(I - I2) > (2**2 - 1)*eps:
+        I=I2
+        h=h/2
+        I2 = intergate(h/2,a, x)
+        
+    
+    return I2
 
 
 def newton_solve(a: float,
@@ -47,7 +57,7 @@ def newton_solve(a: float,
     """
     x = x0
     for k in range(1, max_iter + 1):
-        F = integrate_trap(a, x, n_trap)  # ≈ ∫_a^x f
+        F = integrate_trap(a, x, eps, n_trap)  # ≈ ∫_a^x f
         phi = F - b_val
         if abs(phi) < eps:
             return x, F, phi, k
@@ -60,7 +70,7 @@ def newton_solve(a: float,
         x = x - phi / dphi
 
     # После выхода по числу итераций или из-за dphi == 0
-    F = integrate_trap(a, x, n_trap)
+    F = integrate_trap(a, x, eps, n_trap)
     phi = F - b_val
     return x, F, phi, k
 
