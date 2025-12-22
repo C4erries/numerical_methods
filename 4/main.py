@@ -21,6 +21,18 @@ def norm(v):
     return math.sqrt(sum(vi * vi for vi in v))
 
 
+def residual_norm(A, y, b):
+    """Норма невязки ||A y - b||."""
+    n = len(A)
+    r = []
+    for i in range(n):
+        s = 0.0
+        for j in range(n):
+            s += A[i][j] * y[j]
+        r.append(s - b[i])
+    return norm(r)
+
+
 def gauss_seidel(A, b, y0, eps_inner, max_inner):
     """
     Метод Зейделя для решения A y = b.
@@ -32,12 +44,14 @@ def gauss_seidel(A, b, y0, eps_inner, max_inner):
     for k in range(max_inner):
         y_old = y[:]
         for i in range(n):
+            if A[i][i] == 0:
+                raise ZeroDivisionError("Нулевой диагональный элемент в методе Зейделя")
             s1 = sum(A[i][j] * y[j] for j in range(i))           # j < i -- уже обновлённые
             s2 = sum(A[i][j] * y_old[j] for j in range(i + 1, n))  # j > i -- старые
             y[i] = (b[i] - s1 - s2) / A[i][i]
 
         diff = [y[i] - y_old[i] for i in range(n)]
-        if norm(diff) < eps_inner:
+        if norm(diff) < eps_inner or residual_norm(A, y, b) < eps_inner:
             return y, k + 1
 
     return y, max_inner
@@ -86,6 +100,8 @@ def solve_from_file(in_filename='in.txt', out_filename='out.txt'):
 
     if len(x0) != n:
         raise ValueError("Число компонент начального приближения не совпадает с n")
+    if n != 2:
+        raise ValueError("В этой задаче функции F(x) и J(x) заданы для n = 2")
 
     # ----- РЕШЕНИЕ -----
     x, outer_used, res_norm = newton_gauss_seidel(
