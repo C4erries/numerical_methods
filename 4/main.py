@@ -2,8 +2,8 @@ import math
 
 
 def F(x):
-    f1 = 6.0 * (x[0] - math.pi / 6.0) + math.sin(x[1] - 0.7)
-    f2 = math.sin(x[0] - math.pi / 6.0) + 6.0 * (x[1] - 0.7)
+    f1 = 10.0 * (x[0] - 1.0) + math.sin(x[1] - 1.0)
+    f2 = math.sin(x[0] - 1.0) + 10.0 * (x[1] - 1.0)
     return [f1, f2]
 
 
@@ -12,8 +12,8 @@ def J(x):
     Якоби F(x).
     """
     return [
-        [6.0,                              math.cos(x[1] - 0.7)],
-        [math.cos(x[0] - math.pi / 6.0),   6.0],
+        [10.0,                 math.cos(x[1] - 1.0)],
+        [math.cos(x[0] - 1.0), 10.0],
     ]
 
 def norm(v):
@@ -35,7 +35,7 @@ def residual_norm(A, y, b):
 
 def gauss_seidel(A, b, y0, eps_inner, max_inner):
     """
-    Метод Зейделя для решения A y = b.
+    Метод Зейделя для решения Ay = b.
     Возвращает (y, число_итераций).
     """
     n = len(A)
@@ -91,7 +91,7 @@ def newton_gauss_seidel(x0, eps_outer, eps_inner, max_outer, max_inner):
 
 
 def solve_from_file(in_filename='in.txt', out_filename='out.txt'):
-    # ----- ЧТЕНИЕ ВХОДНЫХ ДАННЫХ -----
+    # ЧТЕНИЕ ВХОДНЫХ ДАННЫХ 
     with open(in_filename, 'r', encoding='utf-8') as f:
         n = int(f.readline().strip())
         eps_outer, eps_inner = map(float, f.readline().split())
@@ -103,12 +103,12 @@ def solve_from_file(in_filename='in.txt', out_filename='out.txt'):
     if n != 2:
         raise ValueError("В этой задаче функции F(x) и J(x) заданы для n = 2")
 
-    # ----- РЕШЕНИЕ -----
+    # РЕШЕНИЕ
     x, outer_used, res_norm = newton_gauss_seidel(
         x0, eps_outer, eps_inner, max_outer, max_inner
     )
 
-    # ----- ЗАПИСЬ РЕЗУЛЬТАТА -----
+    # ЗАПИСЬ РЕЗУЛЬТАТА
     with open(out_filename, 'w', encoding='utf-8') as f:
         f.write('Решение системы:\n')
         for i, xi in enumerate(x, start=1):

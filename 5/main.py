@@ -17,7 +17,7 @@ def intergate(h: float, a: float, x:float) -> float:
 def integrate_trap(a: float, x: float, eps: float, m: int, *, max_refine: int = 30) -> float:
     """
     Численное вычисление интеграла ∫_a^x f(t) dt
-    по формуле трапеций с m разбиениями.
+    по формуле трапеций с m начальными разбиениями.
 
     Корректно работает и если x < a (учитывается знак).
     """
@@ -38,16 +38,15 @@ def integrate_trap(a: float, x: float, eps: float, m: int, *, max_refine: int = 
         s += f(a + i * h)
     T = s * h
 
-    # Ричардсон для трапеций: |T_{2n} - T_n| / (2^2 - 1) ~= ошибка
     for _ in range(max_refine):
-        # Новые точки — середины старых отрезков
+        # Новые точки - середины старых отрезков
         h *= 0.5
         mid_sum = 0.0
         for i in range(1, n + 1):
             mid_sum += f(a + (2 * i - 1) * h)
 
         T2 = 0.5 * T + h * mid_sum
-        if abs(T2 - T) <= (2 ** 2 - 1) * eps:
+        if abs(T2 - T) <= (4 - 1) * eps:
             return T2
 
         T = T2
@@ -70,12 +69,11 @@ def bisection_solve(a: float,
     Решение уравнения Φ(x) = ∫_a^x f(y) dy - b_val = 0 методом дихотомии
     на отрезке [left, right].
 
-    Возвращает кортеж (x, F(x), Φ(x), k), где k — число итераций.
+    Возвращает кортеж (x, F(x), Φ(x), k), где k - число итераций.
     """
     l, r = (left, right) if left <= right else (right, left)
 
     # Для дихотомии достаточно грубее считать интеграл, иначе будет слишком медленно:
-    # на каждой итерации считается Φ(x), а это интеграл.
     if eps_int is None:
         eps_int = max(1e-8, eps * 100.0)
     n_trap_bis = max(10, min(int(n_trap), 500))

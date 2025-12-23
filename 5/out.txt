@@ -1,6 +1,6 @@
-x_bisect = 25.0000000000
+x_bisect = 5.0000000000
 bisection_iterations = 0
-x = 0.9999999987
+x = 1.0000000000
 integral = 1.3333333333
-Phi(x) = integral - b = 7.4562578334e-13
-iterations = 12
+Phi(x) = integral - b = 4.2463810246e-12
+iterations = 8
