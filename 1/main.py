@@ -1,10 +1,10 @@
-import sys
+import argparse
 import numpy as np
 
 
 def read_matrix(path: str) -> np.ndarray:
     """
-    Читает матрицу из текстового файла: по строке на строку, числа через пробел.
+    Читает матрицу из текстового файла.
     Проверяет, что матрица квадратная.
     """
     with open(path, "r", encoding="utf-8") as f:
@@ -31,7 +31,7 @@ def read_matrix(path: str) -> np.ndarray:
 def write_results(path: str, eigenvalues: np.ndarray, eigenvectors: np.ndarray,
                   iterations: int, max_offdiag: float) -> None:
     """
-    Записывает собственные значения, собственные векторы и диагностику.
+    собственные значения, собственные векторы и диагностику.
     """
     with open(path, "w", encoding="utf-8") as f:
         f.write("eigenvalues:\n")
@@ -52,8 +52,8 @@ def jacobi_eigen(A: np.ndarray, eps: float = 1e-10, max_iter: int | None = None)
     if max_iter is None:
         max_iter = 100 * n * n
 
-    # Проверка симметричности: при нарушении — ошибка (не симметризуем).
-    if np.max(np.abs(A - A.T)) > 1e-12:
+    # Проверка симметричности: при нарушении - ошибка.
+    if np.max(np.abs(A - A.T)) > eps:
         raise ValueError("Матрица должна быть симметричной")
 
     A = A.copy()
@@ -72,7 +72,7 @@ def jacobi_eigen(A: np.ndarray, eps: float = 1e-10, max_iter: int | None = None)
         if apq == 0.0:
             continue
 
-        # Устойчивая формула вычисления c и s
+        # Вычисление c и s
         tau = (A[q, q] - A[p, p]) / (2.0 * apq)
         t = np.sign(tau) / (abs(tau) + np.sqrt(1.0 + tau * tau))
         c = 1.0 / np.sqrt(1.0 + t * t)
@@ -110,11 +110,17 @@ def jacobi_eigen(A: np.ndarray, eps: float = 1e-10, max_iter: int | None = None)
 
 
 def main():
-    in_path = 'in.txt'
-    out_path = 'out.txt'
+    parser = argparse.ArgumentParser(description="Метод вращений Якоби для симметричной матрицы")
+    parser.add_argument("in_path", nargs="?", default="in.txt", help="Путь к входному файлу")
+    parser.add_argument("out_path", nargs="?", default="out.txt", help="Путь к выходному файлу")
+    parser.add_argument("--eps", type=float, default=1e-10, help="Точность остановки и проверки симметрии")
+    args = parser.parse_args()
 
-    A = read_matrix(in_path)
-    eigenvalues, eigenvectors, iterations, max_offdiag = jacobi_eigen(A)
+    if args.eps <= 0:
+        raise ValueError("eps должно быть больше нуля")
+
+    A = read_matrix(args.in_path)
+    eigenvalues, eigenvectors, iterations, max_offdiag = jacobi_eigen(A, eps=args.eps)
 
     # Нормировка собственных векторов
     for i in range(eigenvectors.shape[1]):
@@ -127,7 +133,7 @@ def main():
     eigenvalues = eigenvalues[idx]
     eigenvectors = eigenvectors[:, idx]
 
-    write_results(out_path, eigenvalues, eigenvectors, iterations, max_offdiag)
+    write_results(args.out_path, eigenvalues, eigenvectors, iterations, max_offdiag)
 
 
 if __name__ == "__main__":
