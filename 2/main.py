@@ -10,13 +10,30 @@ import numpy as np
 
 from plotter import plot_xy_files
 from solver import (
-    build_problem_from_code,
     build_uniform_grid,
     read_input_config,
     solve_adams_moulton4,
     write_num_exact_delta_csv,
     write_xy_csv,
 )
+
+
+PROBLEM_NAME = "y' = y"
+
+
+def f(t: float, y: np.ndarray) -> np.ndarray:
+    # y' = y
+    _ = t
+    return np.asarray(y, dtype=float)
+
+
+def exact(t: np.ndarray, t0: float, y0: np.ndarray) -> np.ndarray:
+    # y(t) = y0 * exp(t - t0) for scalar y0
+    y0_arr = np.asarray(y0, dtype=float).reshape(-1)
+    if y0_arr.size != 1:
+        raise ValueError("Current exact() expects scalar y0.")
+    t_arr = np.asarray(t, dtype=float)
+    return (y0_arr[0] * np.exp(t_arr - t0)).reshape(-1, 1)
 
 
 def _format_h_for_name(h: float) -> str:
@@ -55,8 +72,6 @@ def run_application(
     tol = float(cfg["tol"])
     max_iter = int(cfg["max_iter"])
 
-    f, exact_fn, problem_name = build_problem_from_code(t0, y0)
-
     out_dir.mkdir(parents=True, exist_ok=True)
     min_h_abs = min(abs(h) for h in h_values)
     exact_h = cfg["exact_h"] if cfg["exact_h"] is not None else min_h_abs / 10.0
@@ -65,7 +80,7 @@ def run_application(
         raise ValueError("exact_h must be non-zero")
 
     t_exact = build_uniform_grid(t0, t_end, exact_h)
-    y_exact = exact_fn(t_exact)
+    y_exact = exact(t_exact, t0, y0)
     exact_path = out_dir / "exact_xy.csv"
     write_xy_csv(exact_path, t_exact, y_exact)
 
@@ -85,7 +100,7 @@ def run_application(
         num_path = out_dir / f"num_h_{_format_h_for_name(h)}.csv"
         write_xy_csv(num_path, t_num, y_num)
 
-        y_ref = exact_fn(t_num)
+        y_ref = exact(t_num, t0, y0)
         detail_path = out_dir / f"num_vs_exact_h_{_format_h_for_name(h)}.csv"
         mean_err, max_err = write_num_exact_delta_csv(detail_path, t_num, y_num, y_ref)
 
@@ -105,14 +120,14 @@ def run_application(
     plot_xy_files(
         series_for_plot,
         plot_path,
-        title=f"{problem_name}: exact and Adams-Moulton",
+        title=f"{PROBLEM_NAME}: exact and Adams-Moulton",
         show_window=show_window,
     )
 
     summary_path = out_dir / "summary.csv"
-    with summary_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["problem", problem_name])
+    with summary_path.open("w", encoding="utf-8", newline="") as fout:
+        writer = csv.writer(fout)
+        writer.writerow(["problem", PROBLEM_NAME])
         writer.writerow(["interval", f"[{t0}, {t_end}]"])
         writer.writerow(["y0", " ".join(f"{v:.12g}" for v in np.asarray(y0, dtype=float).reshape(-1))])
         writer.writerow(["tol", f"{tol:.12e}"])
