@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import warnings
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -237,7 +238,7 @@ def build_problem_from_code(
     return f_exp, exact_exp, problem_name
 
 
-def write_xy_file(path: Path, x: np.ndarray, y: np.ndarray, component: int = 0) -> None:
+def write_xy_csv(path: Path, x: np.ndarray, y: np.ndarray, component: int = 0) -> None:
     x_arr = np.asarray(x, dtype=float).reshape(-1)
     y_arr = np.asarray(y, dtype=float)
     if y_arr.ndim == 1:
@@ -252,10 +253,51 @@ def write_xy_file(path: Path, x: np.ndarray, y: np.ndarray, component: int = 0) 
         raise FloatingPointError("x/y contains NaN/inf")
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["# x y"]
-    for xi, yi in zip(x_arr, y_arr[:, component]):
-        lines.append(f"{xi:.12f}\t{yi:.12e}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["x", "y"])
+        for xi, yi in zip(x_arr, y_arr[:, component]):
+            writer.writerow([f"{xi:.12f}", f"{yi:.12e}"])
+
+
+def write_num_exact_delta_csv(
+    path: Path,
+    x: np.ndarray,
+    y_num: np.ndarray,
+    y_exact: np.ndarray,
+    component: int = 0,
+) -> tuple[float, float]:
+    x_arr = np.asarray(x, dtype=float).reshape(-1)
+    y_num_arr = np.asarray(y_num, dtype=float)
+    y_exact_arr = np.asarray(y_exact, dtype=float)
+
+    if y_num_arr.ndim == 1:
+        y_num_arr = y_num_arr.reshape(-1, 1)
+    if y_exact_arr.ndim == 1:
+        y_exact_arr = y_exact_arr.reshape(-1, 1)
+    if y_num_arr.ndim != 2 or y_exact_arr.ndim != 2:
+        raise ValueError("y_num and y_exact must be 1D or 2D arrays")
+    if y_num_arr.shape != y_exact_arr.shape:
+        raise ValueError("y_num and y_exact shapes mismatch")
+    if x_arr.size != y_num_arr.shape[0]:
+        raise ValueError("x and y arrays lengths mismatch")
+    if component < 0 or component >= y_num_arr.shape[1]:
+        raise ValueError("invalid component index")
+    if not np.all(np.isfinite(x_arr)) or not np.all(np.isfinite(y_num_arr)) or not np.all(np.isfinite(y_exact_arr)):
+        raise FloatingPointError("x/y contains NaN/inf")
+
+    delta = np.abs(y_num_arr[:, component] - y_exact_arr[:, component])
+    mean_err = float(np.mean(delta))
+    max_err = float(np.max(delta))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["x", "y_num", "y_exact", "delta"])
+        for xi, yn, ye, de in zip(x_arr, y_num_arr[:, component], y_exact_arr[:, component], delta):
+            writer.writerow([f"{xi:.12f}", f"{yn:.12e}", f"{ye:.12e}", f"{de:.12e}"])
+
+    return mean_err, max_err
 
 
 def _read_text(path: Path) -> str:
@@ -327,9 +369,9 @@ def read_input_config(path: Path) -> dict:
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     base = Path(__file__).resolve().parent
-    parser = argparse.ArgumentParser(description="ODE solver for Adams-Moulton 4-step, writes x y file.")
+    parser = argparse.ArgumentParser(description="ODE solver for Adams-Moulton 4-step, writes x,y CSV file.")
     parser.add_argument("-i", "--input", type=Path, default=base / "in.txt", help="Input config file")
-    parser.add_argument("-o", "--output", type=Path, default=base / "out_xy.txt", help="Output x y file")
+    parser.add_argument("-o", "--output", type=Path, default=base / "out_xy.csv", help="Output x,y CSV file")
     parser.add_argument("--h", type=float, default=None, help="Step for numerical solution")
     parser.add_argument("--exact", action="store_true", help="Write exact solution on uniform grid")
     parser.add_argument("--grid-h", type=float, default=None, help="Grid step for exact solution")
@@ -348,7 +390,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         grid_h = args.grid_h if args.grid_h is not None else (cfg["exact_h"] or base_h / 10.0)
         t = build_uniform_grid(cfg["t0"], cfg["t_end"], abs(grid_h))
         y = exact_fn(t)
-        write_xy_file(args.output, t, y)
+        write_xy_csv(args.output, t, y)
         return
 
     h = args.h if args.h is not None else cfg["h_values"][0]
@@ -361,9 +403,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         tol=cfg["tol"],
         max_iter=cfg["max_iter"],
     )
-    write_xy_file(args.output, t, y)
+    write_xy_csv(args.output, t, y)
 
 
 if __name__ == "__main__":
     main()
-

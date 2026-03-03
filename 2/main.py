@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -13,7 +14,8 @@ from solver import (
     build_uniform_grid,
     read_input_config,
     solve_adams_moulton4,
-    write_xy_file,
+    write_num_exact_delta_csv,
+    write_xy_csv,
 )
 
 
@@ -64,20 +66,11 @@ def run_application(
 
     t_exact = build_uniform_grid(t0, t_end, exact_h)
     y_exact = exact_fn(t_exact)
-    exact_path = out_dir / "exact_xy.txt"
-    write_xy_file(exact_path, t_exact, y_exact)
+    exact_path = out_dir / "exact_xy.csv"
+    write_xy_csv(exact_path, t_exact, y_exact)
 
     series_for_plot: list[tuple[Path, str]] = [(exact_path, "exact")]
-    summary_lines: list[str] = [
-        "Adams-Moulton 4-step run summary",
-        f"problem: {problem_name}",
-        f"interval: [{t0}, {t_end}]",
-        f"y0: {' '.join(f'{v:.12g}' for v in np.asarray(y0, dtype=float).reshape(-1))}",
-        f"tol: {tol:.3e}",
-        f"max_iter: {max_iter}",
-        f"exact_h: {exact_h:.12g}",
-        "",
-    ]
+    summary_rows: list[list[str]] = []
 
     for h in h_values:
         t_num, y_num, info = solve_adams_moulton4(
@@ -89,16 +82,23 @@ def run_application(
             tol=tol,
             max_iter=max_iter,
         )
-        num_path = out_dir / f"num_h_{_format_h_for_name(h)}.txt"
-        write_xy_file(num_path, t_num, y_num)
+        num_path = out_dir / f"num_h_{_format_h_for_name(h)}.csv"
+        write_xy_csv(num_path, t_num, y_num)
 
         y_ref = exact_fn(t_num)
-        max_err = float(np.max(np.abs(y_num[:, 0] - y_ref[:, 0])))
+        detail_path = out_dir / f"num_vs_exact_h_{_format_h_for_name(h)}.csv"
+        mean_err, max_err = write_num_exact_delta_csv(detail_path, t_num, y_num, y_ref)
 
         series_for_plot.append((num_path, f"h={h:g}"))
-        summary_lines.append(
-            f"h={h:.12g}: points={t_num.size}, converged={info['converged']}, "
-            f"max_abs_error={max_err:.6e}, non_converged_steps={info['non_converged_steps']}"
+        summary_rows.append(
+            [
+                f"{h:.12g}",
+                str(t_num.size),
+                str(info["converged"]),
+                f"{mean_err:.12e}",
+                f"{max_err:.12e}",
+                " ".join(str(v) for v in info["non_converged_steps"]),
+            ]
         )
 
     plot_path = out_dir / "comparison.png"
@@ -109,13 +109,24 @@ def run_application(
         show_window=show_window,
     )
 
-    summary_path = out_dir / "summary.txt"
-    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    summary_path = out_dir / "summary.csv"
+    with summary_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["problem", problem_name])
+        writer.writerow(["interval", f"[{t0}, {t_end}]"])
+        writer.writerow(["y0", " ".join(f"{v:.12g}" for v in np.asarray(y0, dtype=float).reshape(-1))])
+        writer.writerow(["tol", f"{tol:.12e}"])
+        writer.writerow(["max_iter", str(max_iter)])
+        writer.writerow(["exact_h", f"{exact_h:.12g}"])
+        writer.writerow([])
+        writer.writerow(["h", "points", "converged", "mean_abs_error", "max_abs_error", "non_converged_steps"])
+        writer.writerows(summary_rows)
 
     print(f"Done. Output directory: {out_dir.resolve()}")
     print(f"Exact data: {exact_path.name}")
     for h in h_values:
-        print(f"Numeric data for h={h:g}: num_h_{_format_h_for_name(h)}.txt")
+        print(f"Numeric data for h={h:g}: num_h_{_format_h_for_name(h)}.csv")
+        print(f"Num-vs-exact for h={h:g}: num_vs_exact_h_{_format_h_for_name(h)}.csv")
     print(f"Combined plot: {plot_path.name}")
     print(f"Summary: {summary_path.name}")
 
@@ -131,7 +142,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--out-dir",
         type=Path,
         default=base / "out",
-        help="Directory for txt data files and combined plot",
+        help="Directory for CSV data files and combined plot",
     )
     parser.add_argument(
         "--h",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -10,22 +11,29 @@ import numpy as np
 
 
 def read_xy_file(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    x_values: list[float] = []
-    y_values: list[float] = []
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        fields = [name.strip() for name in fieldnames]
+        if "x" not in fields:
+            raise ValueError(f"CSV {path} must contain column 'x'")
 
-    for raw in lines:
-        line = raw.split("#", 1)[0].strip()
-        if not line:
-            continue
-        parts = line.replace(",", " ").split()
-        if len(parts) < 2:
-            continue
-        x_values.append(float(parts[0]))
-        y_values.append(float(parts[1]))
+        y_column = None
+        for cand in ("y", "y_num"):
+            if cand in fields:
+                y_column = cand
+                break
+        if y_column is None:
+            raise ValueError(f"CSV {path} must contain 'y' or 'y_num' column")
+
+        x_values: list[float] = []
+        y_values: list[float] = []
+        for row in reader:
+            x_values.append(float(row["x"]))
+            y_values.append(float(row[y_column]))
 
     if not x_values:
-        raise ValueError(f"No numeric x y rows in file: {path}")
+        raise ValueError(f"No numeric rows in file: {path}")
 
     x = np.asarray(x_values, dtype=float)
     y = np.asarray(y_values, dtype=float)
@@ -54,12 +62,7 @@ def plot_xy_files(
             exact_idx = i
             break
 
-    if exact_idx is None:
-        fig, ax_sol = plt.subplots(1, 1, figsize=(10, 5))
-        axes = [ax_sol]
-    else:
-        fig, (ax_sol, ax_err) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-        axes = [ax_sol, ax_err]
+    fig, ax_sol = plt.subplots(1, 1, figsize=(10, 6))
 
     for i, (x, y, label) in enumerate(series):
         if exact_idx is not None and i == exact_idx:
@@ -69,30 +72,9 @@ def plot_xy_files(
 
     ax_sol.set_title(title)
     ax_sol.set_ylabel("y")
+    ax_sol.set_xlabel("x")
     ax_sol.grid(True, alpha=0.35)
     ax_sol.legend(loc="best")
-
-    if exact_idx is not None:
-        x_exact, y_exact, _ = series[exact_idx]
-        order = np.argsort(x_exact)
-        x_exact_sorted = x_exact[order]
-        y_exact_sorted = y_exact[order]
-
-        for i, (x, y, label) in enumerate(series):
-            if i == exact_idx:
-                continue
-            y_ref = np.interp(x, x_exact_sorted, y_exact_sorted)
-            err = np.abs(y - y_ref)
-            err = np.maximum(err, np.finfo(float).tiny)
-            ax_err.plot(x, err, linewidth=1.7, label=f"|{label} - exact|")
-
-        ax_err.set_yscale("log")
-        ax_err.set_ylabel("abs error")
-        ax_err.set_xlabel("x")
-        ax_err.grid(True, alpha=0.35)
-        ax_err.legend(loc="best")
-    else:
-        ax_sol.set_xlabel("x")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -114,12 +96,12 @@ def _parse_series_arg(value: str) -> tuple[Path, str]:
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     base = Path(__file__).resolve().parent
-    parser = argparse.ArgumentParser(description="Plot multiple x y files in one figure.")
+    parser = argparse.ArgumentParser(description="Plot multiple CSV files (x,y) in one figure.")
     parser.add_argument(
         "--series",
         action="append",
         required=True,
-        help="Series descriptor: path or path|label. Repeat for multiple curves.",
+        help="Series descriptor: csv_path or csv_path|label. Repeat for multiple curves.",
     )
     parser.add_argument("-o", "--output", type=Path, default=base / "comparison.png", help="Output PNG file")
     parser.add_argument("--title", type=str, default="Solutions comparison", help="Plot title")
