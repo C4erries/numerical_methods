@@ -1,12 +1,12 @@
 import numpy as np
 
 
-def power_method(A, eps=1e-6, max_iter=1000, delta=1e-12):
+def power_method(A, eps=1e-6, max_iter=1000, delta=1e-16):
     n = A.shape[0]
     rng = np.random.default_rng()
     y = rng.random(n)
     norm_y = np.max(np.abs(y))
-    if norm_y == 0:
+    if norm_y <= delta:
         return 0.0, y, 0
     x = y / norm_y
     lambda_prev = None
@@ -14,7 +14,7 @@ def power_method(A, eps=1e-6, max_iter=1000, delta=1e-12):
     for k in range(1, max_iter + 1):
         y = A @ x
         norm_y = np.max(np.abs(y))
-        if norm_y == 0:
+        if norm_y <= delta:
             return 0.0, x, k
         x_new = y / norm_y
 
@@ -59,7 +59,8 @@ def solve_from_file(in_filename="in.txt", out_filename="out.txt"):
         raise ValueError("дельта должна быть больше нуля")
 
     lam, vec, iters = power_method(A, eps=eps, max_iter=max_iter, delta=delta)
-
+    L, X = np.linalg.eig(A)
+    print(L, X)
     with open(out_filename, "w", encoding="utf-8") as f:
         f.write(f"lambda = {lam:.10f}\n")
         f.write("eigenvector:\n")

@@ -132,7 +132,7 @@ def main():
     idx = np.argsort(eigenvalues)
     eigenvalues = eigenvalues[idx]
     eigenvectors = eigenvectors[:, idx]
-
+    print(np.linalg.eig(A))
     write_results(args.out_path, eigenvalues, eigenvectors, iterations, max_offdiag)
 
 
