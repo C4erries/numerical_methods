@@ -8,14 +8,10 @@ from typing import Optional, Sequence
 
 import numpy as np
 
+from csv_io import write_num_exact_delta_csv, write_xy_csv
+from input_parser import read_input_config
 from plotter import plot_xy_files
-from solver import (
-    build_uniform_grid,
-    read_input_config,
-    solve_adams_moulton4,
-    write_num_exact_delta_csv,
-    write_xy_csv,
-)
+from solver import solve_adams_moulton4
 
 
 PROBLEM_NAME = "y' = y + t"
@@ -45,6 +41,34 @@ def _deduplicate_h(h_values: Sequence[float]) -> list[float]:
         if not any(abs(h - prev) <= 1e-15 * max(1.0, abs(h), abs(prev)) for prev in unique):
             unique.append(float(h))
     return unique
+
+
+def build_uniform_grid(t0: float, t_end: float, h: float) -> np.ndarray:
+    if not np.isfinite([t0, t_end, h]).all():
+        raise ValueError("t0, t_end, h must be finite")
+    if h <= 0.0:
+        raise ValueError("h for uniform grid must be positive")
+
+    interval = float(t_end - t0)
+    if interval == 0.0:
+        return np.array([t0], dtype=float)
+
+    direction = 1.0 if interval > 0 else -1.0
+    step = direction * h
+    n_full = int(np.floor(abs(interval) / h + 1e-14))
+    remainder = interval - n_full * step
+    eps_t = 10.0 * np.finfo(float).eps * max(1.0, abs(t0), abs(t_end))
+    if abs(remainder) <= eps_t:
+        remainder = 0.0
+
+    t_values = [float(t0)]
+    for _ in range(n_full):
+        t_values.append(t_values[-1] + step)
+    if remainder != 0.0:
+        t_values.append(float(t_end))
+    else:
+        t_values[-1] = float(t_end)
+    return np.array(t_values, dtype=float)
 
 
 def run_application(
