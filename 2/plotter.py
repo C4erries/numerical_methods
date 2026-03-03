@@ -38,6 +38,7 @@ def plot_xy_files(
     file_label_pairs: Sequence[tuple[Path, str]],
     output_path: Path,
     title: str = "Solutions comparison",
+    show_window: bool = True,
 ) -> None:
     if not file_label_pairs:
         raise ValueError("No series provided for plotting")
@@ -96,6 +97,8 @@ def plot_xy_files(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    if show_window:
+        plt.show()
     plt.close(fig)
 
 
@@ -120,6 +123,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-o", "--output", type=Path, default=base / "comparison.png", help="Output PNG file")
     parser.add_argument("--title", type=str, default="Solutions comparison", help="Plot title")
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="Do not open interactive window, only save PNG.",
+    )
     return parser
 
 
@@ -128,9 +136,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     pairs = [_parse_series_arg(item) for item in args.series]
-    plot_xy_files(pairs, args.output, title=args.title)
+    plot_xy_files(pairs, args.output, title=args.title, show_window=not args.no_show)
 
 
 if __name__ == "__main__":
     main()
-

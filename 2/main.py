@@ -31,7 +31,12 @@ def _deduplicate_h(h_values: Sequence[float]) -> list[float]:
     return unique
 
 
-def run_application(input_path: Path, out_dir: Path, h_override: Optional[Sequence[float]] = None) -> None:
+def run_application(
+    input_path: Path,
+    out_dir: Path,
+    h_override: Optional[Sequence[float]] = None,
+    show_window: bool = True,
+) -> None:
     cfg = read_input_config(input_path)
 
     if h_override is not None and len(h_override) > 0:
@@ -101,6 +106,7 @@ def run_application(input_path: Path, out_dir: Path, h_override: Optional[Sequen
         series_for_plot,
         plot_path,
         title=f"{problem_name}: exact and Adams-Moulton",
+        show_window=show_window,
     )
 
     summary_path = out_dir / "summary.txt"
@@ -135,13 +141,23 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional override list of h values, e.g. --h 0.1 0.05 0.025",
     )
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="Do not open interactive window, only save PNG.",
+    )
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
-    run_application(args.input, args.out_dir, h_override=args.h_override)
+    run_application(
+        args.input,
+        args.out_dir,
+        h_override=args.h_override,
+        show_window=not args.no_show,
+    )
 
 
 if __name__ == "__main__":
