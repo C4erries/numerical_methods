@@ -6,8 +6,11 @@ import csv
 from pathlib import Path
 from typing import Optional, Sequence
 
+import matplotlib
+matplotlib.use("WebAgg")
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 
 def read_xy_file(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -51,6 +54,7 @@ def plot_xy_files(
     if not file_label_pairs:
         raise ValueError("No series provided for plotting")
 
+    sns.set_theme(style="whitegrid")
     series: list[tuple[np.ndarray, np.ndarray, str]] = []
     for path, label in file_label_pairs:
         x, y = read_xy_file(path)
@@ -66,9 +70,9 @@ def plot_xy_files(
 
     for i, (x, y, label) in enumerate(series):
         if exact_idx is not None and i == exact_idx:
-            ax_sol.plot(x, y, color="black", linewidth=2.2, label=label)
+            sns.lineplot(x=x, y=y, ax=ax_sol, color="black", linewidth=2.2, label=label)
         else:
-            ax_sol.plot(x, y, linewidth=1.7, label=label)
+            sns.lineplot(x=x, y=y, ax=ax_sol, linewidth=1.7, label=label)
 
     ax_sol.set_title(title)
     ax_sol.set_ylabel("y")

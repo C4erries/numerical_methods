@@ -1,7 +1,7 @@
 t0: 0
-y0: 1 -1 2
-t_end: 4
+y0: 1
+t_end: 2
 h_values: 0.1 0.05
 exact_h: 0.01
 tol: 1e-12
-max_iter: 50
+max_iter: 40

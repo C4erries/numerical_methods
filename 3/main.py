@@ -15,24 +15,20 @@ from solver import solve_adams_moulton4
 
 PROBLEM_NAME = "y1' = y1, y2' = y1 + y2, y3' = y2 + y3"
 
+PROBLEM_NAME = "y' = y"
+
 def f(t: float, y: np.ndarray) -> np.ndarray:
-    # y = [y1, y2, y3]
+    # y' = y
     _ = t
-    yv = np.asarray(y, dtype=float)
-    return np.array([yv[0], yv[0] + yv[1], yv[1] + yv[2]], dtype=float)
+    return np.asarray(y, dtype=float)
 
 def exact(t: np.ndarray, t0: float, y0: np.ndarray) -> np.ndarray:
-    # точное решение для 3-мерной линейной системы
+    # y(t) = y0 * exp(t - t0) (для скалярного y0)
     y0_arr = np.asarray(y0, dtype=float).reshape(-1)
-    if y0_arr.size != 3:
-        raise ValueError("Current exact() expects y0=[y10, y20, y30].")
-    y10, y20, y30 = y0_arr
-    tau = np.asarray(t, dtype=float) - t0
-    exp_tau = np.exp(tau)
-    y1 = y10 * exp_tau
-    y2 = exp_tau * (y20 + y10 * tau)
-    y3 = exp_tau * (y30 + y20 * tau + 0.5 * y10 * tau**2)
-    return np.column_stack((y1, y2, y3))
+    if y0_arr.size != 1:
+        raise ValueError("Current exact() expects scalar y0.")
+    t_arr = np.asarray(t, dtype=float)
+    return (y0_arr[0] * np.exp(t_arr - t0)).reshape(-1, 1)
 
 def _format_h_for_name(h: float) -> str:
     txt = f"{h:.12g}"
@@ -205,7 +201,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
-    show_window = True
+    show_window = not args.no_show
     run_application(
         args.input,
         args.out_dir,

@@ -134,7 +134,7 @@ def solve_adams_moulton4(
 
         for m in range(max_iter):
             f_np1_old = _eval_f(f, tnp1, y_old, dim)
-            # AM4 corrector fixed-point iteration:
+            # AM4 corrector:
             # y^{m+1} = y_n + h/720 * (251 f(t_{n+1}, y^m) + 646 f_n - 264 f_{n-1} + 106 f_{n-2} - 19 f_{n-3})
             y_new = yn + (h_base / 720.0) * (
                 251.0 * f_np1_old + 646.0 * fn - 264.0 * fn1 + 106.0 * fn2 - 19.0 * fn3
