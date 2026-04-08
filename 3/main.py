@@ -13,47 +13,26 @@ from input_parser import read_input_config
 from plotter import plot_xy_files
 from solver import solve_adams_moulton4
 
-
-PROBLEM_NAME_SCALAR = "y' = y + t"
-PROBLEM_NAME_SYSTEM = "x' = v, v' = -x"
-
+PROBLEM_NAME = "y1' = y1, y2' = y1 + y2, y3' = y2 + y3"
 
 def f(t: float, y: np.ndarray) -> np.ndarray:
-    yv = np.asarray(y, dtype=float).reshape(-1)
-    if yv.size == 1:
-        # Scalar fallback.
-        return yv + t
-    if yv.size == 2:
-        # Harmonic oscillator system.
-        return np.array([yv[1], -yv[0]], dtype=float)
-    raise ValueError(f"f is configured only for dim=1 or dim=2, got dim={yv.size}")
+    # y = [y1, y2, y3]
+    _ = t
+    yv = np.asarray(y, dtype=float)
+    return np.array([yv[0], yv[0] + yv[1], yv[1] + yv[2]], dtype=float)
 
-
-def exact(t: np.ndarray, t0: float, y0: float | np.ndarray) -> np.ndarray:
+def exact(t: np.ndarray, t0: float, y0: np.ndarray) -> np.ndarray:
+    # точное решение для 3-мерной линейной системы
     y0_arr = np.asarray(y0, dtype=float).reshape(-1)
-    t_arr = np.asarray(t, dtype=float)
-    tau = t_arr - t0
-    if y0_arr.size == 1:
-        # y(t) = C*exp(t) - t - 1, C from y(t0)=y0.
-        c = y0_arr[0] + t0 + 1.0
-        return (c * np.exp(tau) - t_arr - 1.0).reshape(-1, 1)
-    if y0_arr.size == 2:
-        # x' = v, v' = -x.
-        x0, v0 = y0_arr
-        x = x0 * np.cos(tau) + v0 * np.sin(tau)
-        v = -x0 * np.sin(tau) + v0 * np.cos(tau)
-        return np.column_stack((x, v))
-    raise ValueError(f"exact is configured only for dim=1 or dim=2, got dim={y0_arr.size}")
-
-
-def _problem_name(y0: float | np.ndarray) -> str:
-    dim = int(np.asarray(y0, dtype=float).reshape(-1).size)
-    if dim == 1:
-        return PROBLEM_NAME_SCALAR
-    if dim == 2:
-        return PROBLEM_NAME_SYSTEM
-    return f"System ODE (dim={dim})"
-
+    if y0_arr.size != 3:
+        raise ValueError("Current exact() expects y0=[y10, y20, y30].")
+    y10, y20, y30 = y0_arr
+    tau = np.asarray(t, dtype=float) - t0
+    exp_tau = np.exp(tau)
+    y1 = y10 * exp_tau
+    y2 = exp_tau * (y20 + y10 * tau)
+    y3 = exp_tau * (y30 + y20 * tau + 0.5 * y10 * tau**2)
+    return np.column_stack((y1, y2, y3))
 
 def _format_h_for_name(h: float) -> str:
     txt = f"{h:.12g}"
@@ -118,7 +97,6 @@ def run_application(
     t_end = float(cfg["t_end"])
     tol = float(cfg["tol"])
     max_iter = int(cfg["max_iter"])
-    problem_name = _problem_name(y0)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     min_h_abs = min(abs(h) for h in h_values)
@@ -168,14 +146,14 @@ def run_application(
     plot_xy_files(
         series_for_plot,
         plot_path,
-        title=f"{problem_name}: exact and Adams-Moulton",
+        title=f"{PROBLEM_NAME}: exact and Adams-Moulton",
         show_window=show_window,
     )
 
     summary_path = out_dir / "summary.csv"
     with summary_path.open("w", encoding="utf-8", newline="") as fout:
         writer = csv.writer(fout)
-        writer.writerow(["problem", problem_name])
+        writer.writerow(["problem", PROBLEM_NAME])
         writer.writerow(["interval", f"[{t0}, {t_end}]"])
         writer.writerow(["y0", " ".join(f"{v:.12g}" for v in np.asarray(y0, dtype=float).reshape(-1))])
         writer.writerow(["tol", f"{tol:.12e}"])
@@ -218,6 +196,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-show",
         action="store_true",
+        default=False,
         help="Do not open interactive window, only save PNG.",
     )
     return parser
@@ -226,11 +205,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    show_window = True
     run_application(
         args.input,
         args.out_dir,
         h_override=args.h_override,
-        show_window=not args.no_show,
+        show_window=show_window,
     )
 
 

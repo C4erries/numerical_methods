@@ -191,6 +191,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-show",
         action="store_true",
+        default=False,
         help="Do not open interactive window, only save PNG.",
     )
     return parser
@@ -199,11 +200,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    show_window = not args.no_show
     run_application(
         args.input,
         args.out_dir,
         h_override=args.h_override,
-        show_window=not args.no_show,
+        show_window=show_window,
     )
 
 
