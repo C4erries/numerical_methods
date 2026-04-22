@@ -13,22 +13,21 @@ from input_parser import read_input_config
 from plotter import plot_xy_files
 from solver import solve_adams_moulton4
 
-PROBLEM_NAME = "y1' = y1, y2' = y1 + y2, y3' = y2 + y3"
-
-PROBLEM_NAME = "y' = y"
+PROBLEM_NAME = "y' = y + t"
 
 def f(t: float, y: np.ndarray) -> np.ndarray:
-    # y' = y
-    _ = t
-    return np.asarray(y, dtype=float)
+    # y' = y + t
+    return np.asarray(y, dtype=float) + t
 
 def exact(t: np.ndarray, t0: float, y0: np.ndarray) -> np.ndarray:
-    # y(t) = y0 * exp(t - t0) (для скалярного y0)
+    # y(t) = C*exp(t) - t - 1, C из y(t0)=y0
     y0_arr = np.asarray(y0, dtype=float).reshape(-1)
     if y0_arr.size != 1:
         raise ValueError("Current exact() expects scalar y0.")
     t_arr = np.asarray(t, dtype=float)
-    return (y0_arr[0] * np.exp(t_arr - t0)).reshape(-1, 1)
+    c = y0_arr[0] + t0 + 1.0
+    return (c * np.exp(t_arr - t0) - t_arr - 1.0).reshape(-1, 1)
+
 
 def _format_h_for_name(h: float) -> str:
     txt = f"{h:.12g}"
