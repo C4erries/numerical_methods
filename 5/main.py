@@ -8,56 +8,62 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from csv_io import write_num_exact_delta_csv, write_xy_csv
+from csv_io import write_grid_csv, write_num_exact_delta_grid_csv
 from input_parser import read_input_config
-from plotter import plot_xy_files
-from solver import build_uniform_grid, solve_finite_difference_bvp
+from plotter import plot_grid_files
+from solver import build_uniform_grid_2d, solve_poisson_dirichlet
 
 
+PROBLEM_NAME = "Poisson Dirichlet: u = sin(pi*x) sin(pi*y)"
 
 
-PROBLEM_NAME = "easy"
-
-def p(x: float) -> float:
-    return 0.0
-
-def q(x: float) -> float:
-    return 0.0
-
-def rhs(x: float) -> float:
-    return -float(np.sin(x))
-
-def exact(x: np.ndarray, a: float, b: float, y_left: float, dy_right: float) -> np.ndarray:
-    _ = a, b, y_left, dy_right
-    return np.sin(np.asarray(x, dtype=float)).reshape(-1, 1)
+def rhs(x: float, y: float) -> float:
+    return -2.0 * float(np.pi**2 * np.sin(np.pi * x) * np.sin(np.pi * y))
 
 
-##
-###
-####
+def exact_value(x: np.ndarray | float, y: np.ndarray | float) -> np.ndarray:
+    return np.sin(np.pi * np.asarray(x, dtype=float)) * np.sin(np.pi * np.asarray(y, dtype=float))
+
+
+def boundary(x: float, y: float) -> float:
+    return float(exact_value(x, y))
+
+
+def exact_grid(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    xx, yy = np.meshgrid(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
+    return exact_value(xx, yy)
+
+
 def _deduplicate_n(n_values: Sequence[int]) -> list[int]:
     unique: list[int] = []
     for n in n_values:
         n_int = int(n)
-        if n_int <= 0:
-            raise ValueError("n values must be positive")
+        if n_int < 2:
+            raise ValueError("n values must be at least 2")
         if n_int not in unique:
             unique.append(n_int)
     return unique
 
 
-def _n_values_from_h(a: float, b: float, h_values: Sequence[float]) -> list[int]:
-    interval = b - a
+def _n_values_from_h(x0: float, x1: float, y0: float, y1: float, h_values: Sequence[float]) -> list[int]:
+    x_len = x1 - x0
+    y_len = y1 - y0
     result: list[int] = []
     for h in h_values:
         h = float(h)
         if h <= 0.0 or not np.isfinite(h):
             raise ValueError("h values must be positive and finite")
-        n_float = interval / h
-        n = int(round(n_float))
-        if n <= 0 or abs(n_float - n) > 1e-10 * max(1.0, abs(n_float)):
-            raise ValueError(f"h={h:g} does not split [{a}, {b}] into an integer number of intervals")
-        result.append(n)
+        nx_float = x_len / h
+        ny_float = y_len / h
+        nx = int(round(nx_float))
+        ny = int(round(ny_float))
+        if nx != ny:
+            raise ValueError("h must give the same n in x and y for this version")
+        if nx < 2 or abs(nx_float - nx) > 1e-10 * max(1.0, abs(nx_float)):
+            raise ValueError(f"h={h:g} does not split x interval into an integer number of intervals")
+        if abs(ny_float - ny) > 1e-10 * max(1.0, abs(ny_float)):
+            raise ValueError(f"h={h:g} does not split y interval into an integer number of intervals")
+        result.append(nx)
     return result
 
 
@@ -76,16 +82,15 @@ def run_application(
 ) -> None:
     cfg = read_input_config(input_path)
 
-    a = float(cfg["a"])
-    b = float(cfg["b"])
-    y_left = float(cfg["y_left"])
-    dy_right = float(cfg["dy_right"])
-    boundary_order = int(cfg["boundary_order"])
+    x0 = float(cfg["x0"])
+    x1 = float(cfg["x1"])
+    y0 = float(cfg["y0"])
+    y1 = float(cfg["y1"])
 
     if n_override is not None and len(n_override) > 0:
         n_values = [int(n) for n in n_override]
     elif h_override is not None and len(h_override) > 0:
-        n_values = _n_values_from_h(a, b, h_override)
+        n_values = _n_values_from_h(x0, x1, y0, y1, h_override)
     else:
         n_values = list(cfg["n_values"])
         if len(n_values) == 1:
@@ -94,11 +99,11 @@ def run_application(
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    exact_n = max(int(cfg["exact_n"]), max(n_values) * 10)
-    x_exact = build_uniform_grid(a, b, exact_n)
-    y_exact = exact(x_exact, a, b, y_left, dy_right)
-    exact_path = out_dir / "exact_xy.csv"
-    write_xy_csv(exact_path, x_exact, y_exact)
+    exact_n = max(int(cfg["exact_n"]), max(n_values) * 4)
+    x_exact, y_exact = build_uniform_grid_2d(x0, x1, y0, y1, exact_n)
+    u_exact = exact_grid(x_exact, y_exact)
+    exact_path = out_dir / "exact_grid.csv"
+    write_grid_csv(exact_path, x_exact, y_exact, u_exact)
 
     solution_series: list[tuple[Path, str]] = [(exact_path, "exact")]
     error_series: list[tuple[Path, str]] = []
@@ -107,33 +112,32 @@ def run_application(
     prev_max_err: float | None = None
 
     for n in n_values:
-        x_num, y_num, info = solve_finite_difference_bvp(
-            p=p,
-            q=q,
+        x_num, y_num, u_num, info = solve_poisson_dirichlet(
             f=rhs,
-            a=a,
-            b=b,
+            boundary=boundary,
+            x0=x0,
+            x1=x1,
+            y0=y0,
+            y1=y1,
             n=n,
-            y_left=y_left,
-            dy_right=dy_right,
-            boundary_order=boundary_order,
         )
-        h = info["h"]
         num_path = out_dir / f"num_n_{n}.csv"
-        write_xy_csv(num_path, x_num, y_num)
+        write_grid_csv(num_path, x_num, y_num, u_num)
 
-        y_ref = exact(x_num, a, b, y_left, dy_right)
+        u_ref = exact_grid(x_num, y_num)
         detail_path = out_dir / f"num_vs_exact_n_{n}.csv"
-        mean_err, max_err = write_num_exact_delta_csv(detail_path, x_num, y_num, y_ref)
+        mean_err, max_err = write_num_exact_delta_grid_csv(detail_path, x_num, y_num, u_num, u_ref)
 
-        solution_series.append((num_path, f"n={n}, h={h:g}"))
-        error_series.append((detail_path, f"n={n}, h={h:g}"))
+        solution_series.append((num_path, f"n={n}, hx={info['hx']:.4g}, hy={info['hy']:.4g}"))
+        error_series.append((detail_path, f"n={n}"))
         summary_rows.append(
             [
                 str(n),
-                f"{h:.12g}",
-                str(x_num.size),
-                str(boundary_order),
+                f"{info['hx']:.12g}",
+                f"{info['hy']:.12g}",
+                str(info["points"]),
+                str(info["unknowns"]),
+                str(info["method"]),
                 f"{mean_err:.12e}",
                 f"{max_err:.12e}",
                 _format_error_ratio(prev_mean_err, mean_err),
@@ -143,23 +147,24 @@ def run_application(
         )
         prev_mean_err = mean_err
         prev_max_err = max_err
-    
+
     summary_path = out_dir / "summary.csv"
     with summary_path.open("w", encoding="utf-8", newline="") as fout:
         writer = csv.writer(fout)
         writer.writerow(["problem", PROBLEM_NAME])
-        writer.writerow(["interval", f"[{a}, {b}]"])
-        writer.writerow(["y_left", f"{y_left:.12g}"])
-        writer.writerow(["dy_right", f"{dy_right:.12g}"])
-        writer.writerow(["boundary_order", str(boundary_order)])
+        writer.writerow(["equation", "u_xx + u_yy = f(x, y)"])
+        writer.writerow(["rectangle", f"[{x0}, {x1}] x [{y0}, {y1}]"])
+        writer.writerow(["boundary", "u = exact on rectangle boundary"])
         writer.writerow(["exact_n", str(exact_n)])
         writer.writerow([])
         writer.writerow(
             [
                 "n",
-                "h",
+                "hx",
+                "hy",
                 "points",
-                "boundary_order",
+                "unknowns",
+                "method",
                 "mean_abs_error",
                 "max_abs_error",
                 "mean_error_ratio_prev",
@@ -170,24 +175,24 @@ def run_application(
         writer.writerows(summary_rows)
 
     plot_path = out_dir / "comparison.png"
-    plot_xy_files(
+    plot_grid_files(
         solution_series,
         plot_path,
         title=f"{PROBLEM_NAME}: exact and finite difference",
         show_window=show_window,
+        value_label="u",
     )
 
     error_plot_path = out_dir / "errors.png"
-    plot_xy_files(
+    plot_grid_files(
         error_series,
         error_plot_path,
         title=f"{PROBLEM_NAME}: absolute error",
         show_window=show_window,
-        y_column="delta",
-        y_label="|y_num - y_exact|",
+        value_column="delta",
+        value_label="|u_num - u_exact|",
+        cmap="magma",
     )
-
-    
 
     print(f"Done. Output directory: {out_dir.resolve()}")
     print(f"Exact data: {exact_path.name}")
@@ -202,7 +207,7 @@ def run_application(
 def _build_arg_parser() -> argparse.ArgumentParser:
     base = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(
-        description="Run finite-difference BVP solver for several grids and plot exact + numerical curves."
+        description="Run finite-difference Poisson-Dirichlet solver for several grids."
     )
     parser.add_argument("-i", "--input", type=Path, default=base / "in.txt", help="Input config file")
     parser.add_argument(
@@ -210,7 +215,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--out-dir",
         type=Path,
         default=base / "out",
-        help="Directory for CSV data files and combined plot",
+        help="Directory for CSV data files and plots",
     )
     parser.add_argument(
         "--n",
@@ -218,7 +223,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         nargs="+",
         default=None,
-        help="Optional override list of n values, e.g. --n 10 20 40",
+        help="Optional override list of n values, e.g. --n 8 16 32",
     )
     parser.add_argument(
         "--h",
@@ -226,7 +231,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         nargs="+",
         default=None,
-        help="Optional override list of h values, e.g. --h 0.1 0.05 0.025",
+        help="Optional override list of h values, e.g. --h 0.125 0.0625",
     )
     parser.add_argument(
         "--no-show",
@@ -243,13 +248,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.n_override is not None and args.h_override is not None:
         raise ValueError("Use either --n or --h, not both")
 
-    show_window = not args.no_show
     run_application(
         args.input,
         args.out_dir,
         n_override=args.n_override,
         h_override=args.h_override,
-        show_window=show_window,
+        show_window=not args.no_show,
     )
 
 

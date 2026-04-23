@@ -1,8 +1,7 @@
 a: 0
-b: 1
-y_left: 0.2
-dy_right: 2.6224308075507947
-n_values: 80 160 320
-exact_n: 2000
+b: 1.5707963267948966
+y_left: 0
+dy_right: 0
+n_values: 10 20 40
+exact_n: 800
 boundary_order: 2
-
