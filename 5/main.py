@@ -78,6 +78,9 @@ def run_application(
     out_dir: Path,
     n_override: Optional[Sequence[int]] = None,
     h_override: Optional[Sequence[float]] = None,
+    method_override: Optional[str] = None,
+    tol_override: Optional[float] = None,
+    max_iter_override: Optional[int] = None,
     show_window: bool = True,
 ) -> None:
     cfg = read_input_config(input_path)
@@ -86,6 +89,9 @@ def run_application(
     x1 = float(cfg["x1"])
     y0 = float(cfg["y0"])
     y1 = float(cfg["y1"])
+    method = str(method_override if method_override is not None else cfg["method"])
+    tol = float(tol_override if tol_override is not None else cfg["tol"])
+    max_iter = int(max_iter_override if max_iter_override is not None else cfg["max_iter"])
 
     if n_override is not None and len(n_override) > 0:
         n_values = [int(n) for n in n_override]
@@ -120,6 +126,9 @@ def run_application(
             y0=y0,
             y1=y1,
             n=n,
+            method=method,
+            tol=tol,
+            max_iter=max_iter,
         )
         num_path = out_dir / f"num_n_{n}.csv"
         write_grid_csv(num_path, x_num, y_num, u_num)
@@ -138,10 +147,13 @@ def run_application(
                 str(info["points"]),
                 str(info["unknowns"]),
                 str(info["method"]),
+                str(info["converged"]),
+                str(info["iterations"]),
                 f"{mean_err:.12e}",
                 f"{max_err:.12e}",
                 _format_error_ratio(prev_mean_err, mean_err),
                 _format_error_ratio(prev_max_err, max_err),
+                f"{info['correction_norm']:.12e}",
                 f"{info['residual_norm']:.12e}",
             ]
         )
@@ -155,6 +167,9 @@ def run_application(
         writer.writerow(["equation", "u_xx + u_yy = f(x, y)"])
         writer.writerow(["rectangle", f"[{x0}, {x1}] x [{y0}, {y1}]"])
         writer.writerow(["boundary", "u = exact on rectangle boundary"])
+        writer.writerow(["method", method])
+        writer.writerow(["tol", f"{tol:.12e}"])
+        writer.writerow(["max_iter", str(max_iter)])
         writer.writerow(["exact_n", str(exact_n)])
         writer.writerow([])
         writer.writerow(
@@ -165,10 +180,13 @@ def run_application(
                 "points",
                 "unknowns",
                 "method",
+                "converged",
+                "iterations",
                 "mean_abs_error",
                 "max_abs_error",
                 "mean_error_ratio_prev",
                 "max_error_ratio_prev",
+                "correction_norm",
                 "residual_norm",
             ]
         )
@@ -234,6 +252,25 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Optional override list of h values, e.g. --h 0.125 0.0625",
     )
     parser.add_argument(
+        "--method",
+        type=str,
+        default=None,
+        choices=("dense", "seidel"),
+        help="Linear system solver: dense or seidel. Defaults to method from input file.",
+    )
+    parser.add_argument(
+        "--tol",
+        type=float,
+        default=None,
+        help="Optional tolerance override for iterative methods.",
+    )
+    parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=None,
+        help="Optional max iteration override for iterative methods.",
+    )
+    parser.add_argument(
         "--no-show",
         action="store_true",
         default=False,
@@ -253,6 +290,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         args.out_dir,
         n_override=args.n_override,
         h_override=args.h_override,
+        method_override=args.method,
+        tol_override=args.tol,
+        max_iter_override=args.max_iter,
         show_window=not args.no_show,
     )
 

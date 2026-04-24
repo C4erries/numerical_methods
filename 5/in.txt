@@ -4,3 +4,6 @@ y0: 0
 y1: 1
 n_values: 8 16 32
 exact_n: 160
+method: seidel
+tol: 1e-10
+max_iter: 10000

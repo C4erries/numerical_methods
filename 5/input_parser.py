@@ -123,4 +123,7 @@ def read_input_config(path: Path) -> dict[str, Any]:
         "y1": y1,
         "n_values": n_values,
         "exact_n": exact_n,
+        "method": cfg.get("method", "dense").strip(),
+        "tol": float(cfg.get("tol", "1e-10")),
+        "max_iter": int(float(cfg.get("max_iter", "10000"))),
     }
