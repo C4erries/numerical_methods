@@ -15,22 +15,40 @@ from solver import build_uniform_grid, solve_finite_difference_bvp
 
 
 
+PROBLEM_NAME = "hard"
 
-PROBLEM_NAME = "easy"
+def exact_scalar(x: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    return np.exp(-3.0 * x_arr) * np.sin(10.0 * x_arr) + 0.2 * np.cos(5.0 * x_arr) + x_arr * x_arr
+
+def exact_derivative(x: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    return (
+        np.exp(-3.0 * x_arr) * (10.0 * np.cos(10.0 * x_arr) - 3.0 * np.sin(10.0 * x_arr))
+        - np.sin(5.0 * x_arr)
+        + 2.0 * x_arr
+    )
+
+def exact_second_derivative(x: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    return np.exp(-3.0 * x_arr) * (-60.0 * np.cos(10.0 * x_arr) - 91.0 * np.sin(10.0 * x_arr)) - 5.0 * np.cos(5.0 * x_arr) + 2.0
 
 def p(x: float) -> float:
-    return 0.0
+    return float(np.sin(2.0 * x) + 0.5 * x)
 
 def q(x: float) -> float:
-    return 0.0
+    return 1.0 + x * x
 
 def rhs(x: float) -> float:
-    return -float(np.sin(x))
+    return float(
+        exact_second_derivative(x)
+        + p(x) * exact_derivative(x)
+        + q(x) * exact_scalar(x)
+    )
 
 def exact(x: np.ndarray, a: float, b: float, y_left: float, dy_right: float) -> np.ndarray:
     _ = a, b, y_left, dy_right
-    return np.sin(np.asarray(x, dtype=float)).reshape(-1, 1)
-
+    return exact_scalar(x).reshape(-1, 1)
 
 ##
 ###

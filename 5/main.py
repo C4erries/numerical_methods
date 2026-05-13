@@ -14,15 +14,45 @@ from plotter import plot_grid_files
 from solver import build_uniform_grid_2d, solve_poisson_dirichlet
 
 
-PROBLEM_NAME = "Poisson Dirichlet: u = sin(pi*x) sin(pi*y)"
+PROBLEM_NAME = "hard"
+
+
+def exact_scalar(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    return (
+        np.exp(-3.0 * x_arr) * np.sin(10.0 * x_arr) * np.cos(8.0 * y_arr)
+        + 0.2 * np.cos(5.0 * y_arr)
+        + x_arr * x_arr * y_arr
+    )
+
+
+def exact_u_xx(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    return (
+        np.exp(-3.0 * x_arr)
+        * (-91.0 * np.sin(10.0 * x_arr) - 60.0 * np.cos(10.0 * x_arr))
+        * np.cos(8.0 * y_arr)
+        + 2.0 * y_arr
+    )
+
+
+def exact_u_yy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    return (
+        -64.0 * np.exp(-3.0 * x_arr) * np.sin(10.0 * x_arr) * np.cos(8.0 * y_arr)
+        - 5.0 * np.cos(5.0 * y_arr)
+    )
 
 
 def rhs(x: float, y: float) -> float:
-    return -2.0 * float(np.pi**2 * np.sin(np.pi * x) * np.sin(np.pi * y))
+    return float(exact_u_xx(x, y) + exact_u_yy(x, y))
 
 
 def exact_value(x: np.ndarray | float, y: np.ndarray | float) -> np.ndarray:
-    return np.sin(np.pi * np.asarray(x, dtype=float)) * np.sin(np.pi * np.asarray(y, dtype=float))
+    return exact_scalar(x, y)
 
 
 def boundary(x: float, y: float) -> float:

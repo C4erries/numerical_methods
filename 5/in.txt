@@ -2,8 +2,8 @@ x0: 0
 x1: 1
 y0: 0
 y1: 1
-n_values: 8 16 32
-exact_n: 160
+n_values: 40 80 160
+exact_n: 800
 method: seidel
 tol: 1e-10
-max_iter: 10000
+max_iter: 50000
