@@ -192,6 +192,28 @@ def run_application(
         )
         writer.writerows(summary_rows)
 
+
+    surface_html_path: Path | None = None
+    try:
+        from plotter3d import build_interactive_surface
+    except ImportError:
+        print("Skipping 3D HTML: plotly is not installed (pip install plotly).")
+    else:
+        numeric_pairs = []
+        for n in n_values:
+            numeric_pairs.append((
+                int(n),
+                out_dir / f"num_n_{n}.csv",
+                out_dir / f"num_vs_exact_n_{n}.csv",
+            ))
+        surface_html_path = out_dir / "surface.html"
+        build_interactive_surface(
+            exact_path,
+            numeric_pairs,
+            surface_html_path,
+            title=f"{PROBLEM_NAME}: interactive 3D surface",
+        )
+        
     plot_path = out_dir / "comparison.png"
     plot_grid_files(
         solution_series,
@@ -212,6 +234,8 @@ def run_application(
         cmap="magma",
     )
 
+    
+
     print(f"Done. Output directory: {out_dir.resolve()}")
     print(f"Exact data: {exact_path.name}")
     for n in n_values:
@@ -219,6 +243,8 @@ def run_application(
         print(f"Num-vs-exact for n={n}: num_vs_exact_n_{n}.csv")
     print(f"Combined plot: {plot_path.name}")
     print(f"Error plot: {error_plot_path.name}")
+    if surface_html_path is not None:
+        print(f"Interactive 3D: {surface_html_path.name}")
     print(f"Summary: {summary_path.name}")
 
 
