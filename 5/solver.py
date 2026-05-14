@@ -123,6 +123,7 @@ def solve_linear_system_gauss_seidel(
         raise ZeroDivisionError("zero diagonal element in Gauss-Seidel method")
     row_entries: list[list[tuple[int, float]]] = []
     for i in range(n):
+        print(f"seidel {i}")
         entries: list[tuple[int, float]] = []
         for j in np.flatnonzero(a[i]):
             if j != i:
@@ -226,12 +227,14 @@ def solve_poisson_dirichlet(
 
     u = np.zeros((n + 1, n + 1), dtype=float)
     for j, yj in enumerate(y):
+        print(f"{j}, {yj} xyi ")
         for i, xi in enumerate(x):
             if i == 0 or i == n or j == 0 or j == n:
                 u[j, i] = _eval_scalar2d(boundary, xi, yj, "boundary")
 
     interior_count = n - 1
     for j in range(1, n):
+        print(f"interior {j}")
         for i in range(1, n):
             u[j, i] = interior[_interior_index(i, j, interior_count)]
 

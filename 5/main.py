@@ -13,51 +13,21 @@ from input_parser import read_input_config
 from plotter import plot_grid_files
 from solver import build_uniform_grid_2d, solve_poisson_dirichlet
 
-
-PROBLEM_NAME = "hard"
-
+PROBLEM_NAME = "medium"
 
 def exact_scalar(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     x_arr = np.asarray(x, dtype=float)
     y_arr = np.asarray(y, dtype=float)
-    return (
-        np.exp(-3.0 * x_arr) * np.sin(10.0 * x_arr) * np.cos(8.0 * y_arr)
-        + 0.2 * np.cos(5.0 * y_arr)
-        + x_arr * x_arr * y_arr
-    )
-
-
-def exact_u_xx(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    x_arr = np.asarray(x, dtype=float)
-    y_arr = np.asarray(y, dtype=float)
-    return (
-        np.exp(-3.0 * x_arr)
-        * (-91.0 * np.sin(10.0 * x_arr) - 60.0 * np.cos(10.0 * x_arr))
-        * np.cos(8.0 * y_arr)
-        + 2.0 * y_arr
-    )
-
-
-def exact_u_yy(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    x_arr = np.asarray(x, dtype=float)
-    y_arr = np.asarray(y, dtype=float)
-    return (
-        -64.0 * np.exp(-3.0 * x_arr) * np.sin(10.0 * x_arr) * np.cos(8.0 * y_arr)
-        - 5.0 * np.cos(5.0 * y_arr)
-    )
-
+    return (x_arr * x_arr - y_arr * y_arr) * np.exp(x_arr + y_arr)
 
 def rhs(x: float, y: float) -> float:
-    return float(exact_u_xx(x, y) + exact_u_yy(x, y))
+    return float(4.0 * (x - y) * np.exp(x + y))
 
-
-def exact_value(x: np.ndarray | float, y: np.ndarray | float) -> np.ndarray:
+def exact_value(x, y) -> np.ndarray:
     return exact_scalar(x, y)
-
 
 def boundary(x: float, y: float) -> float:
     return float(exact_value(x, y))
-
 
 def exact_grid(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     xx, yy = np.meshgrid(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
