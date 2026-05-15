@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 import matplotlib
-matplotlib.use("WebAgg")
+matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
